@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <meta name="description" content="Classify fabric fiber types from macro-lens photos using AI" />
+    <title>PTT Fabric Fiber Classifier</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet" />
+    <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <h1>PTT Fabric Fiber Classifier</h1>
+        </header>
+
+        <!-- Permission Screen -->
+        <section id="permission-screen" class="screen active">
+            <div class="card neon-card permission-card">
+
+                <h2>Camera Access Required</h2>
+                <button id="btn-grant-camera" class="btn btn-outline">
+                    Enable Camera
+                </button>
+            </div>
+        </section>
+
+        <!-- Camera Screen -->
+        <section id="camera-screen" class="screen">
+            <div class="camera-wrapper">
+                <video id="camera-feed" autoplay playsinline></video>
+                <canvas id="capture-canvas" style="display: none;"></canvas>
+                <div class="camera-overlay">
+                    <div class="scan-frame"></div>
+                    <!-- Dim area outside the square -->
+                    <div class="dim-top"></div>
+                    <div class="dim-bottom"></div>
+                    <div class="dim-left"></div>
+                    <div class="dim-right"></div>
+                </div>
+            </div>
+            <div class="camera-controls">
+                <button id="btn-switch-camera" class="btn btn-icon-only" title="Switch camera">
+                    🔄
+                </button>
+                <button id="btn-capture" class="btn btn-capture" title="Capture photo">
+                    <span class="capture-ring"></span>
+                </button>
+                <div class="spacer"></div>
+            </div>
+        </section>
+
+        <!-- Result Screen -->
+        <section id="result-screen" class="screen">
+            <div class="captured-preview-wrapper">
+                <img id="captured-preview" alt="Captured fabric" />
+            </div>
+            <div id="result-card" class="card neon-card result-card">
+                <!-- Loading state -->
+                <div id="result-loading" class="result-loading">
+                    <div class="spinner"></div>
+                    <p>Analyzing fiber structure…</p>
+                </div>
+                <!-- Success state -->
+                <div id="result-success" class="result-content hidden">
+                    <div class="result-badge">
+                        <span class="badge-label">Predicted Class</span>
+                        <span id="result-class" class="badge-value"></span>
+                    </div>
+                    <div class="confidence-bar-wrapper">
+                        <div class="confidence-label">
+                            <span>Confidence</span>
+                            <span id="result-confidence-text"></span>
+                        </div>
+                        <div class="confidence-bar">
+                            <div id="result-confidence-bar" class="confidence-fill"></div>
+                        </div>
+                    </div>
+                    <div id="other-predictions" class="other-predictions"></div>
+                </div>
+                <!-- Error state -->
+                <div id="result-error" class="result-content hidden">
+                    <div class="error-icon">⚠️</div>
+                    <p id="error-message">Something went wrong.</p>
+                </div>
+            </div>
+            <div class="result-actions">
+                <button id="btn-retake" class="btn btn-outline">
+                    Classify Another
+                </button>
+            </div>
+        </section>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
