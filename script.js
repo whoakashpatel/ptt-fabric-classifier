@@ -208,7 +208,12 @@ async function startCapturePipeline(base64DataUrl) {
             throw new Error(`Server error ${res.status}: ${detail}`);
         }
 
-        const { job_id } = await res.json();
+        const { job_id, device_online } = await res.json();
+
+        // If device was offline at capture time, mark sensor step as skipped immediately
+        if (!device_online) {
+            stepDevice.classList.add("skipped");
+        }
 
         // Poll for results
         await pollJob(job_id);
