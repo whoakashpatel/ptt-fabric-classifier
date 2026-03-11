@@ -1,5 +1,5 @@
 // ============================================================
-//  PTT Fabric Fiber Classifier — Camera & Classification Logic
+//  PTT Fabric Fiber Classifier — Camera, Inference & Device
 // ============================================================
 
 const API_URL = "https://hsakaletap-ptt-fabric-classifier.hf.space";
@@ -19,8 +19,6 @@ const captureCanvas = document.getElementById("capture-canvas");
 const capturedPreview = document.getElementById("captured-preview");
 
 const cameraWrapper = document.querySelector(".camera-wrapper");
-const scanFrame = document.querySelector(".scan-frame");
-const cameraOverlay = document.querySelector(".camera-overlay");
 
 const resultLoading = document.getElementById("result-loading");
 const resultSuccess = document.getElementById("result-success");
@@ -31,13 +29,46 @@ const resultConfBar = document.getElementById("result-confidence-bar");
 const otherPredictions = document.getElementById("other-predictions");
 const errorMessage = document.getElementById("error-message");
 
+const stepInference = document.getElementById("step-inference");
+const stepDevice = document.getElementById("step-device");
+const sensorSection = document.getElementById("sensor-section");
+const sensorCharge = document.getElementById("sensor-charge");
+const sensorTemp = document.getElementById("sensor-temp");
+const sensorHumidity = document.getElementById("sensor-humidity");
+const deviceOfflineNote = document.getElementById("device-offline-note");
+
+const deviceStatusDot = document.querySelector(".status-dot");
+
 // --- State ---
 let currentStream = null;
 let facingMode = "environment";
 
 // ============================================================
-//  Scan-frame sizing — keeps the square centred and tells
-//  CSS dim-overlays how big to be via custom properties
+//  Device status polling
+// ============================================================
+async function checkDeviceStatus() {
+    try {
+        const res = await fetch(`${API_URL}/device/status`, { signal: AbortSignal.timeout(5000) });
+        const data = await res.json();
+        if (data.online) {
+            deviceStatusDot.classList.remove("offline");
+            deviceStatusDot.classList.add("online");
+        } else {
+            deviceStatusDot.classList.remove("online");
+            deviceStatusDot.classList.add("offline");
+        }
+    } catch {
+        deviceStatusDot.classList.remove("online");
+        deviceStatusDot.classList.add("offline");
+    }
+}
+
+// Poll every 5 seconds
+setInterval(checkDeviceStatus, 5000);
+checkDeviceStatus();
+
+// ============================================================
+//  Scan-frame sizing
 // ============================================================
 function updateFrameLayout() {
     if (!cameraWrapper) return;
@@ -45,20 +76,15 @@ function updateFrameLayout() {
     const w = rect.width;
     const h = rect.height;
 
-    // Square side = 75% of the shorter dimension, capped at 300px
     const side = Math.min(w * 0.75, h * 0.75, 300);
-
-    // Set the scan-frame size
     cameraWrapper.style.setProperty("--frame-size", side + "px");
 
-    // Dim overlay strips
     const dimV = ((h - side) / 2) + "px";
     const dimH = ((w - side) / 2) + "px";
     cameraWrapper.style.setProperty("--dim-v", dimV);
     cameraWrapper.style.setProperty("--dim-h", dimH);
 }
 
-// Re-calculate on resize / orientation change
 window.addEventListener("resize", updateFrameLayout);
 
 // ============================================================
@@ -69,8 +95,6 @@ function showScreen(screen) {
         s.classList.remove("active")
     );
     screen.classList.add("active");
-
-    // Update scan-frame dimensions when camera screen appears
     if (screen === cameraScreen) {
         requestAnimationFrame(updateFrameLayout);
     }
@@ -81,7 +105,6 @@ function showScreen(screen) {
 // ============================================================
 async function startCamera() {
     stopCamera();
-
     try {
         const constraints = {
             video: {
@@ -108,12 +131,7 @@ function stopCamera() {
 }
 
 // ============================================================
-//  Capture — crops exactly the visible square region
-//
-//  The video uses object-fit: cover inside the wrapper.
-//  We figure out which part of the raw video is visible,
-//  then map the scan-frame's element-space position into
-//  raw-video-pixel coordinates and crop that square.
+//  Capture — crops the visible square region
 // ============================================================
 function capturePhoto() {
     const video = cameraFeed;
@@ -127,32 +145,25 @@ function capturePhoto() {
     const ew = wrapperRect.width;
     const eh = wrapperRect.height;
 
-    // Scan-frame size in CSS px (matches updateFrameLayout)
     const side = Math.min(ew * 0.75, eh * 0.75, 300);
 
-    // object-fit: cover scaling ratio
     const scaleX = vw / ew;
     const scaleY = vh / eh;
     const coverScale = Math.min(scaleX, scaleY);
 
-    // Visible portion of the video in video-px
     const visW = ew * coverScale;
     const visH = eh * coverScale;
 
-    // Offset from video origin to visible top-left
     const offX = (vw - visW) / 2;
     const offY = (vh - visH) / 2;
 
-    // Scan-frame top-left in element-space
     const fX = (ew - side) / 2;
     const fY = (eh - side) / 2;
 
-    // Map to video coords
     const srcX = offX + fX * coverScale;
     const srcY = offY + fY * coverScale;
     const srcSize = side * coverScale;
 
-    // Output square (cap at 640px for network efficiency)
     const outSize = Math.min(Math.round(srcSize), 640);
     canvas.width = outSize;
     canvas.height = outSize;
@@ -165,42 +176,91 @@ function capturePhoto() {
 
     stopCamera();
     showScreen(resultScreen);
-    classify(dataUrl);
+    startCapturePipeline(dataUrl);
 }
 
 // ============================================================
-//  Classification API call
+//  Capture pipeline: POST /capture → poll /job/{id}
 // ============================================================
-async function classify(base64DataUrl) {
+async function startCapturePipeline(base64DataUrl) {
+    // Reset UI
     resultLoading.classList.remove("hidden");
     resultSuccess.classList.add("hidden");
     resultError.classList.add("hidden");
     resultConfBar.style.width = "0%";
+    sensorSection.classList.add("hidden");
+    deviceOfflineNote.classList.add("hidden");
+
+    // Reset loading step indicators
+    stepInference.classList.remove("done");
+    stepDevice.classList.remove("done", "skipped");
 
     try {
-        const response = await fetch(`${API_URL}/predict`, {
+        // Submit the capture job
+        const res = await fetch(`${API_URL}/capture`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ image: base64DataUrl }),
         });
 
-        if (!response.ok) {
-            const detail = await response.text();
-            throw new Error(`Server error ${response.status}: ${detail}`);
+        if (!res.ok) {
+            const detail = await res.text();
+            throw new Error(`Server error ${res.status}: ${detail}`);
         }
 
-        const data = await response.json();
-        showResult(data);
+        const { job_id } = await res.json();
+
+        // Poll for results
+        await pollJob(job_id);
     } catch (err) {
-        console.error("Classification failed:", err);
-        showError(err.message || "Network error — is the inference server running?");
+        console.error("Capture pipeline failed:", err);
+        showError(err.message || "Network error — is the server running?");
     }
 }
 
+async function pollJob(jobId) {
+    const MAX_POLLS = 60;  // up to 60s
+    const POLL_INTERVAL = 1000;
+
+    for (let i = 0; i < MAX_POLLS; i++) {
+        try {
+            const res = await fetch(`${API_URL}/job/${jobId}`);
+            if (!res.ok) throw new Error(`Poll error ${res.status}`);
+
+            const data = await res.json();
+
+            // Update loading indicators
+            if (data.predictions) {
+                stepInference.classList.add("done");
+            }
+            if (data.sensor_readings || data.device_offline) {
+                stepDevice.classList.add(data.device_offline ? "skipped" : "done");
+            }
+
+            if (data.status === "complete") {
+                showCombinedResult(data);
+                return;
+            }
+        } catch (err) {
+            console.error("Poll error:", err);
+        }
+
+        await new Promise(r => setTimeout(r, POLL_INTERVAL));
+    }
+
+    showError("Timed out waiting for results.");
+}
+
 // ============================================================
-//  Display results
+//  Display combined results
 // ============================================================
-function showResult(data) {
+function showCombinedResult(data) {
+    // Inference results
+    if (data.inference_error) {
+        showError("Inference failed: " + data.inference_error);
+        return;
+    }
+
     const predictions = data.predictions;
     if (!predictions || predictions.length === 0) {
         showError("No predictions returned.");
@@ -208,7 +268,6 @@ function showResult(data) {
     }
 
     const top = predictions[0];
-
     resultClass.textContent = top.class_name.replace(/_/g, " ");
     const confPercent = (top.confidence * 100).toFixed(1);
     resultConfText.textContent = `${confPercent}%`;
@@ -217,6 +276,7 @@ function showResult(data) {
         resultConfBar.style.width = `${confPercent}%`;
     });
 
+    // Other predictions
     otherPredictions.innerHTML = "";
     if (predictions.length > 1) {
         const heading = document.createElement("h4");
@@ -234,6 +294,19 @@ function showResult(data) {
         });
     }
 
+    // Sensor readings
+    if (data.sensor_readings) {
+        const s = data.sensor_readings;
+        sensorCharge.textContent = s.static_charge_v.toFixed(4);
+        sensorTemp.textContent = s.temperature_c >= 0 ? s.temperature_c.toFixed(1) : "err";
+        sensorHumidity.textContent = s.humidity_pct >= 0 ? s.humidity_pct.toFixed(1) : "err";
+        sensorSection.classList.remove("hidden");
+        deviceOfflineNote.classList.add("hidden");
+    } else if (data.device_offline) {
+        sensorSection.classList.add("hidden");
+        deviceOfflineNote.classList.remove("hidden");
+    }
+
     resultLoading.classList.add("hidden");
     resultSuccess.classList.remove("hidden");
 }
@@ -248,14 +321,9 @@ function showError(msg) {
 //  Event listeners
 // ============================================================
 btnGrantCamera.addEventListener("click", () => startCamera());
-
 btnCapture.addEventListener("click", () => capturePhoto());
-
 btnSwitchCamera.addEventListener("click", () => {
     facingMode = facingMode === "environment" ? "user" : "environment";
     startCamera();
 });
-
-btnRetake.addEventListener("click", () => {
-    startCamera();
-});
+btnRetake.addEventListener("click", () => startCamera());

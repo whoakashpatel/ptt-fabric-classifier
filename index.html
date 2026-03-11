@@ -18,12 +18,15 @@
         <!-- Header -->
         <header class="header">
             <h1>PTT Fabric Fiber Classifier</h1>
+            <div id="device-status" class="device-status">
+                <span class="status-dot offline"></span>
+                <span class="status-label">Device</span>
+            </div>
         </header>
 
         <!-- Permission Screen -->
         <section id="permission-screen" class="screen active">
             <div class="card neon-card permission-card">
-
                 <h2>Camera Access Required</h2>
                 <button id="btn-grant-camera" class="btn btn-outline">
                     Enable Camera
@@ -38,7 +41,6 @@
                 <canvas id="capture-canvas" style="display: none;"></canvas>
                 <div class="camera-overlay">
                     <div class="scan-frame"></div>
-                    <!-- Dim area outside the square -->
                     <div class="dim-top"></div>
                     <div class="dim-bottom"></div>
                     <div class="dim-left"></div>
@@ -65,10 +67,20 @@
                 <!-- Loading state -->
                 <div id="result-loading" class="result-loading">
                     <div class="spinner"></div>
-                    <p>Analyzing fiber structure…</p>
+                    <div class="loading-steps">
+                        <div class="loading-step" id="step-inference">
+                            <span class="step-spinner"></span>
+                            Analyzing image…
+                        </div>
+                        <div class="loading-step" id="step-device">
+                            <span class="step-spinner"></span>
+                            Reading sensors…
+                        </div>
+                    </div>
                 </div>
                 <!-- Success state -->
                 <div id="result-success" class="result-content hidden">
+                    <!-- Classification -->
                     <div class="result-badge">
                         <span class="badge-label">Predicted Class</span>
                         <span id="result-class" class="badge-value"></span>
@@ -83,6 +95,35 @@
                         </div>
                     </div>
                     <div id="other-predictions" class="other-predictions"></div>
+
+                    <!-- Sensor Readings -->
+                    <div id="sensor-section" class="sensor-section hidden">
+                        <h4 class="sensor-heading">Sensor Readings</h4>
+                        <div class="sensor-grid">
+                            <div class="sensor-item">
+                                <span class="sensor-icon">⚡</span>
+                                <span class="sensor-value" id="sensor-charge">—</span>
+                                <span class="sensor-unit">V</span>
+                                <span class="sensor-name">Static Charge</span>
+                            </div>
+                            <div class="sensor-item">
+                                <span class="sensor-icon">🌡️</span>
+                                <span class="sensor-value" id="sensor-temp">—</span>
+                                <span class="sensor-unit">°C</span>
+                                <span class="sensor-name">Temperature</span>
+                            </div>
+                            <div class="sensor-item">
+                                <span class="sensor-icon">💧</span>
+                                <span class="sensor-value" id="sensor-humidity">—</span>
+                                <span class="sensor-unit">%</span>
+                                <span class="sensor-name">Humidity</span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Device offline note -->
+                    <div id="device-offline-note" class="device-offline-note hidden">
+                        <span>⚠️ Sensor device was offline — showing image classification only</span>
+                    </div>
                 </div>
                 <!-- Error state -->
                 <div id="result-error" class="result-content hidden">
