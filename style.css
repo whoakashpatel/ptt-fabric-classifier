@@ -428,6 +428,55 @@ body {
     width: var(--dim-h, 10%);
 }
 
+/* --- Lens picker --- */
+.lens-picker {
+    padding: var(--space-sm) var(--space-md);
+}
+
+.lens-options {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+
+.lens-options::-webkit-scrollbar {
+    display: none;
+}
+
+.lens-btn {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+    height: 32px;
+    padding: 0 10px;
+    border-radius: var(--radius-full);
+    border: 1.5px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-secondary);
+    font-family: var(--font-family);
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    -webkit-tap-highlight-color: transparent;
+}
+
+.lens-btn.active {
+    border-color: var(--neon-blue);
+    color: var(--text-primary);
+    background: rgba(77, 201, 246, 0.08);
+    box-shadow: 0 0 8px rgba(77, 201, 246, 0.25);
+}
+
+.lens-btn:active {
+    transform: scale(0.95);
+}
+
 /* --- Camera controls --- */
 .camera-controls {
     display: flex;

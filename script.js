@@ -38,10 +38,16 @@ const sensorHumidity = document.getElementById("sensor-humidity");
 const deviceOfflineNote = document.getElementById("device-offline-note");
 
 const deviceStatusDot = document.querySelector(".status-dot");
+const lensPicker = document.getElementById("lens-picker");
+const lensOptionsEl = document.getElementById("lens-options");
 
 // --- State ---
 let currentStream = null;
 let facingMode = "environment";
+let rearCameras = [];      // [{deviceId, label, shortLabel}]
+let activeDeviceId = null;
+let zoomCapability = null;    // {min, max, step} or null
+let currentZoom = 1;
 
 // ============================================================
 //  Device status polling
@@ -63,7 +69,6 @@ async function checkDeviceStatus() {
     }
 }
 
-// Poll every 5 seconds
 setInterval(checkDeviceStatus, 5000);
 checkDeviceStatus();
 
@@ -101,25 +106,215 @@ function showScreen(screen) {
 }
 
 // ============================================================
-//  Camera management
+//  Camera management — with lens/zoom detection
 // ============================================================
-async function startCamera() {
+
+/**
+ * First-time init: request permission, discover rear cameras,
+ * then start the first one.
+ */
+async function initCameras() {
     stopCamera();
+
+    // Request permission with a temporary stream
     try {
-        const constraints = {
-            video: {
-                facingMode: facingMode,
-                width: { ideal: 1920 },
-                height: { ideal: 1080 },
-            },
+        const tmp = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: facingMode },
             audio: false,
-        };
-        currentStream = await navigator.mediaDevices.getUserMedia(constraints);
-        cameraFeed.srcObject = currentStream;
-        showScreen(cameraScreen);
+        });
+        tmp.getTracks().forEach(t => t.stop());
     } catch (err) {
-        console.error("Camera error:", err);
+        console.error("Camera permission error:", err);
         alert("Could not access camera. Please grant permission and try again.");
+        return;
+    }
+
+    // Enumerate all video devices
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const videoDevices = devices.filter(d => d.kind === "videoinput");
+
+    // Find rear-facing cameras (or front if user toggled)
+    rearCameras = [];
+    const frontKW = ["front", "user", "facing front", "selfie"];
+
+    for (const dev of videoDevices) {
+        const lbl = (dev.label || "").toLowerCase();
+        const isFront = frontKW.some(kw => lbl.includes(kw));
+
+        if (facingMode === "environment" && !isFront) {
+            rearCameras.push({ deviceId: dev.deviceId, label: dev.label || `Camera ${rearCameras.length + 1}` });
+        } else if (facingMode === "user" && isFront) {
+            rearCameras.push({ deviceId: dev.deviceId, label: dev.label || `Front ${rearCameras.length + 1}` });
+        }
+    }
+
+    // Fallback: no cameras matched — use all
+    if (rearCameras.length === 0) {
+        rearCameras = videoDevices.map((d, i) => ({
+            deviceId: d.deviceId,
+            label: d.label || `Camera ${i + 1}`,
+        }));
+    }
+
+    // Assign short labels
+    rearCameras.forEach((cam, i) => {
+        cam.shortLabel = deriveShortLabel(cam.label, i);
+    });
+
+    // Start the first camera
+    activeDeviceId = rearCameras[0]?.deviceId || null;
+    await startCameraWithDevice(activeDeviceId);
+}
+
+/**
+ * Derive a compact label like "0.5×", "1×", "2×" from the device label.
+ */
+function deriveShortLabel(label, index) {
+    const lbl = label.toLowerCase();
+    if (lbl.includes("ultrawide") || lbl.includes("ultra-wide") || lbl.includes("ultra wide")) return "0.5×";
+    if (lbl.includes("telephoto") || lbl.includes("tele")) return "2×";
+    if (lbl.includes("wide") && !lbl.includes("ultra")) return "1×";
+    return `${index + 1}`;
+}
+
+/**
+ * Start a specific camera by deviceId and detect zoom.
+ */
+async function startCameraWithDevice(deviceId) {
+    stopCamera();
+
+    const constraints = {
+        video: { width: { ideal: 1920 }, height: { ideal: 1080 } },
+        audio: false,
+    };
+
+    if (deviceId) {
+        constraints.video.deviceId = { exact: deviceId };
+    } else {
+        constraints.video.facingMode = facingMode;
+    }
+
+    try {
+        currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+    } catch {
+        // Fallback without exact deviceId
+        try {
+            currentStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
+                audio: false,
+            });
+        } catch (err2) {
+            console.error("Camera error:", err2);
+            alert("Could not access this camera.");
+            return;
+        }
+    }
+
+    cameraFeed.srcObject = currentStream;
+
+    // Detect zoom capability
+    zoomCapability = null;
+    currentZoom = 1;
+
+    const track = currentStream.getVideoTracks()[0];
+    if (track && typeof track.getCapabilities === "function") {
+        const caps = track.getCapabilities();
+        if (caps.zoom && caps.zoom.max > 1) {
+            zoomCapability = {
+                min: caps.zoom.min,
+                max: caps.zoom.max,
+                step: caps.zoom.step || 0.1,
+            };
+            currentZoom = track.getSettings?.().zoom || 1;
+        }
+    }
+
+    buildLensPicker();
+    showScreen(cameraScreen);
+}
+
+/**
+ * Apply digital zoom to the active track.
+ */
+async function applyZoom(level) {
+    if (!currentStream || !zoomCapability) return;
+    const track = currentStream.getVideoTracks()[0];
+    if (!track) return;
+
+    const clamped = Math.max(zoomCapability.min, Math.min(zoomCapability.max, level));
+    try {
+        await track.applyConstraints({ advanced: [{ zoom: clamped }] });
+        currentZoom = clamped;
+    } catch (err) {
+        console.warn("Zoom not supported:", err);
+    }
+}
+
+/**
+ * Build the lens picker buttons from detected cameras + zoom levels.
+ */
+function buildLensPicker() {
+    lensOptionsEl.innerHTML = "";
+
+    const multiCam = rearCameras.length > 1;
+    const hasZoom = zoomCapability && zoomCapability.max > 1;
+
+    if (!multiCam && !hasZoom) {
+        lensPicker.classList.add("hidden");
+        return;
+    }
+    lensPicker.classList.remove("hidden");
+
+    // Camera buttons
+    if (multiCam) {
+        rearCameras.forEach(cam => {
+            const btn = document.createElement("button");
+            btn.className = "lens-btn" + (cam.deviceId === activeDeviceId ? " active" : "");
+            btn.textContent = cam.shortLabel;
+            btn.title = cam.label;
+            btn.addEventListener("click", () => {
+                activeDeviceId = cam.deviceId;
+                startCameraWithDevice(cam.deviceId);
+            });
+            lensOptionsEl.appendChild(btn);
+        });
+    }
+
+    // Zoom buttons
+    if (hasZoom) {
+        if (multiCam) {
+            const sep = document.createElement("div");
+            sep.style.cssText = "width:1px;height:20px;background:rgba(255,255,255,0.12);margin:0 4px;flex-shrink:0;";
+            lensOptionsEl.appendChild(sep);
+        }
+
+        const steps = [1];
+        if (zoomCapability.max >= 2) steps.push(2);
+        if (zoomCapability.max >= 4) steps.push(4);
+        if (zoomCapability.max >= 10) steps.push(10);
+
+        steps.forEach(z => {
+            const btn = document.createElement("button");
+            btn.className = "lens-btn" + (Math.abs(currentZoom - z) < 0.3 ? " active" : "");
+            btn.textContent = `${z}×`;
+            btn.title = `${z}x zoom`;
+            btn.addEventListener("click", async () => {
+                await applyZoom(z);
+                buildLensPicker();
+            });
+            lensOptionsEl.appendChild(btn);
+        });
+    }
+}
+
+/**
+ * Start camera (for retake flows).
+ */
+async function startCamera() {
+    if (rearCameras.length === 0) {
+        await initCameras();
+    } else {
+        await startCameraWithDevice(activeDeviceId);
     }
 }
 
@@ -183,7 +378,6 @@ function capturePhoto() {
 //  Capture pipeline: POST /capture → poll /job/{id}
 // ============================================================
 async function startCapturePipeline(base64DataUrl) {
-    // Reset UI
     resultLoading.classList.remove("hidden");
     resultSuccess.classList.add("hidden");
     resultError.classList.add("hidden");
@@ -191,12 +385,10 @@ async function startCapturePipeline(base64DataUrl) {
     sensorSection.classList.add("hidden");
     deviceOfflineNote.classList.add("hidden");
 
-    // Reset loading step indicators
     stepInference.classList.remove("done");
     stepDevice.classList.remove("done", "skipped");
 
     try {
-        // Submit the capture job
         const res = await fetch(`${API_URL}/capture`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -210,12 +402,10 @@ async function startCapturePipeline(base64DataUrl) {
 
         const { job_id, device_online } = await res.json();
 
-        // If device was offline at capture time, mark sensor step as skipped immediately
         if (!device_online) {
             stepDevice.classList.add("skipped");
         }
 
-        // Poll for results
         await pollJob(job_id);
     } catch (err) {
         console.error("Capture pipeline failed:", err);
@@ -224,7 +414,7 @@ async function startCapturePipeline(base64DataUrl) {
 }
 
 async function pollJob(jobId) {
-    const MAX_POLLS = 60;  // up to 60s
+    const MAX_POLLS = 60;
     const POLL_INTERVAL = 1000;
 
     for (let i = 0; i < MAX_POLLS; i++) {
@@ -234,10 +424,7 @@ async function pollJob(jobId) {
 
             const data = await res.json();
 
-            // Update loading indicators
-            if (data.predictions) {
-                stepInference.classList.add("done");
-            }
+            if (data.predictions) stepInference.classList.add("done");
             if (data.sensor_readings || data.device_offline) {
                 stepDevice.classList.add(data.device_offline ? "skipped" : "done");
             }
@@ -260,7 +447,6 @@ async function pollJob(jobId) {
 //  Display combined results
 // ============================================================
 function showCombinedResult(data) {
-    // Inference results
     if (data.inference_error) {
         showError("Inference failed: " + data.inference_error);
         return;
@@ -281,7 +467,6 @@ function showCombinedResult(data) {
         resultConfBar.style.width = `${confPercent}%`;
     });
 
-    // Other predictions
     otherPredictions.innerHTML = "";
     if (predictions.length > 1) {
         const heading = document.createElement("h4");
@@ -299,7 +484,6 @@ function showCombinedResult(data) {
         });
     }
 
-    // Sensor readings
     if (data.sensor_readings) {
         const s = data.sensor_readings;
         sensorCharge.textContent = s.static_charge_v.toFixed(4);
@@ -325,10 +509,11 @@ function showError(msg) {
 // ============================================================
 //  Event listeners
 // ============================================================
-btnGrantCamera.addEventListener("click", () => startCamera());
+btnGrantCamera.addEventListener("click", () => initCameras());
 btnCapture.addEventListener("click", () => capturePhoto());
 btnSwitchCamera.addEventListener("click", () => {
     facingMode = facingMode === "environment" ? "user" : "environment";
-    startCamera();
+    rearCameras = [];  // re-enumerate for new facing mode
+    initCameras();
 });
 btnRetake.addEventListener("click", () => startCamera());
