@@ -1,60 +1,45 @@
 // ============================================================
-//  PTT Fabric Fiber Classifier — Camera, Inference & Device
+//  PTT Fabric Fiber Classifier — Native Camera & Device
 // ============================================================
 
 const API_URL = "https://hsakaletap-ptt-fabric-classifier.hf.space";
 
 // --- DOM refs ---
-const permissionScreen = document.getElementById("permission-screen");
-const cameraScreen = document.getElementById("camera-screen");
-const resultScreen = document.getElementById("result-screen");
+const captureScreen    = document.getElementById("capture-screen");
+const resultScreen     = document.getElementById("result-screen");
 
-const btnGrantCamera = document.getElementById("btn-grant-camera");
-const btnCapture = document.getElementById("btn-capture");
-const btnSwitchCamera = document.getElementById("btn-switch-camera");
-const btnRetake = document.getElementById("btn-retake");
+const nativeInput      = document.getElementById("native-camera-input");
+const btnOpenCamera    = document.getElementById("btn-open-camera");
 
-const cameraFeed = document.getElementById("camera-feed");
-const captureCanvas = document.getElementById("capture-canvas");
-const capturedPreview = document.getElementById("captured-preview");
+const captureCanvas    = document.getElementById("capture-canvas");
+const capturedPreview  = document.getElementById("captured-preview");
 
-const cameraWrapper = document.querySelector(".camera-wrapper");
-
-const resultLoading = document.getElementById("result-loading");
-const resultSuccess = document.getElementById("result-success");
-const resultError = document.getElementById("result-error");
-const resultClass = document.getElementById("result-class");
-const resultConfText = document.getElementById("result-confidence-text");
-const resultConfBar = document.getElementById("result-confidence-bar");
+const resultLoading    = document.getElementById("result-loading");
+const resultSuccess    = document.getElementById("result-success");
+const resultError      = document.getElementById("result-error");
+const resultClass      = document.getElementById("result-class");
+const resultConfText   = document.getElementById("result-confidence-text");
+const resultConfBar    = document.getElementById("result-confidence-bar");
 const otherPredictions = document.getElementById("other-predictions");
-const errorMessage = document.getElementById("error-message");
+const errorMessage     = document.getElementById("error-message");
 
-const stepInference = document.getElementById("step-inference");
-const stepDevice = document.getElementById("step-device");
-const sensorSection = document.getElementById("sensor-section");
-const sensorCharge = document.getElementById("sensor-charge");
-const sensorTemp = document.getElementById("sensor-temp");
-const sensorHumidity = document.getElementById("sensor-humidity");
+const stepInference    = document.getElementById("step-inference");
+const stepDevice       = document.getElementById("step-device");
+const sensorSection    = document.getElementById("sensor-section");
+const sensorCharge     = document.getElementById("sensor-charge");
+const sensorTemp       = document.getElementById("sensor-temp");
+const sensorHumidity   = document.getElementById("sensor-humidity");
 const deviceOfflineNote = document.getElementById("device-offline-note");
 
-const deviceStatusDot = document.querySelector(".status-dot");
-const lensPicker = document.getElementById("lens-picker");
-const lensOptionsEl = document.getElementById("lens-options");
-
-// --- State ---
-let currentStream = null;
-let facingMode = "environment";
-let rearCameras = [];      // [{deviceId, label, shortLabel}]
-let activeDeviceId = null;
-let zoomCapability = null;    // {min, max, step} or null
-let currentZoom = 1;
+const deviceStatusDot  = document.querySelector(".status-dot");
+const btnRetake        = document.getElementById("btn-retake");
 
 // ============================================================
 //  Device status polling
 // ============================================================
 async function checkDeviceStatus() {
     try {
-        const res = await fetch(`${API_URL}/device/status`, { signal: AbortSignal.timeout(5000) });
+        const res = await fetch(`${API_URL}/device/status`, {signal: AbortSignal.timeout(5000)});
         const data = await res.json();
         if (data.online) {
             deviceStatusDot.classList.remove("offline");
@@ -73,303 +58,68 @@ setInterval(checkDeviceStatus, 5000);
 checkDeviceStatus();
 
 // ============================================================
-//  Scan-frame sizing
-// ============================================================
-function updateFrameLayout() {
-    if (!cameraWrapper) return;
-    const rect = cameraWrapper.getBoundingClientRect();
-    const w = rect.width;
-    const h = rect.height;
-
-    const side = Math.min(w * 0.75, h * 0.75, 300);
-    cameraWrapper.style.setProperty("--frame-size", side + "px");
-
-    const dimV = ((h - side) / 2) + "px";
-    const dimH = ((w - side) / 2) + "px";
-    cameraWrapper.style.setProperty("--dim-v", dimV);
-    cameraWrapper.style.setProperty("--dim-h", dimH);
-}
-
-window.addEventListener("resize", updateFrameLayout);
-
-// ============================================================
 //  Screen navigation
 // ============================================================
 function showScreen(screen) {
-    [permissionScreen, cameraScreen, resultScreen].forEach(s =>
-        s.classList.remove("active")
-    );
+    captureScreen.classList.remove("active");
+    resultScreen.classList.remove("active");
     screen.classList.add("active");
-    if (screen === cameraScreen) {
-        requestAnimationFrame(updateFrameLayout);
-    }
 }
 
 // ============================================================
-//  Camera management — with lens/zoom detection
+//  Native Camera Handling
 // ============================================================
 
-/**
- * First-time init: request permission, discover rear cameras,
- * then start the first one.
- */
-async function initCameras() {
-    stopCamera();
+btnOpenCamera.addEventListener("click", () => {
+    // Programmatically open the file input (which triggers native camera)
+    nativeInput.click();
+});
 
-    // Request permission with a temporary stream
-    try {
-        const tmp = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: facingMode },
-            audio: false,
-        });
-        tmp.getTracks().forEach(t => t.stop());
-    } catch (err) {
-        console.error("Camera permission error:", err);
-        alert("Could not access camera. Please grant permission and try again.");
-        return;
-    }
+btnRetake.addEventListener("click", () => {
+    // Reset file input so same photo can trigger change event again if needed,
+    // though usually retake means picking a new one.
+    nativeInput.value = "";
+    showScreen(captureScreen);
+});
 
-    // Enumerate all video devices
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const videoDevices = devices.filter(d => d.kind === "videoinput");
+nativeInput.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
 
-    // Find rear-facing cameras (or front if user toggled)
-    rearCameras = [];
-    const frontKW = ["front", "user", "facing front", "selfie"];
-
-    for (const dev of videoDevices) {
-        const lbl = (dev.label || "").toLowerCase();
-        const isFront = frontKW.some(kw => lbl.includes(kw));
-
-        if (facingMode === "environment" && !isFront) {
-            rearCameras.push({ deviceId: dev.deviceId, label: dev.label || `Camera ${rearCameras.length + 1}` });
-        } else if (facingMode === "user" && isFront) {
-            rearCameras.push({ deviceId: dev.deviceId, label: dev.label || `Front ${rearCameras.length + 1}` });
-        }
-    }
-
-    // Fallback: no cameras matched — use all
-    if (rearCameras.length === 0) {
-        rearCameras = videoDevices.map((d, i) => ({
-            deviceId: d.deviceId,
-            label: d.label || `Camera ${i + 1}`,
-        }));
-    }
-
-    // Assign short labels
-    rearCameras.forEach((cam, i) => {
-        cam.shortLabel = deriveShortLabel(cam.label, i);
-    });
-
-    // Start the first camera
-    activeDeviceId = rearCameras[0]?.deviceId || null;
-    await startCameraWithDevice(activeDeviceId);
-}
-
-/**
- * Derive a compact label like "0.5×", "1×", "2×" from the device label.
- */
-function deriveShortLabel(label, index) {
-    const lbl = label.toLowerCase();
-    if (lbl.includes("ultrawide") || lbl.includes("ultra-wide") || lbl.includes("ultra wide")) return "0.5×";
-    if (lbl.includes("telephoto") || lbl.includes("tele")) return "2×";
-    if (lbl.includes("wide") && !lbl.includes("ultra")) return "1×";
-    return `${index + 1}`;
-}
-
-/**
- * Start a specific camera by deviceId and detect zoom.
- */
-async function startCameraWithDevice(deviceId) {
-    stopCamera();
-
-    const constraints = {
-        video: { width: { ideal: 1920 }, height: { ideal: 1080 } },
-        audio: false,
+    // We have a photo! Now convert it, crop it safely, and process it.
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+            processAndSendImage(img);
+        };
+        img.src = event.target.result;
     };
+    reader.readAsDataURL(file);
+});
 
-    if (deviceId) {
-        constraints.video.deviceId = { exact: deviceId };
-    } else {
-        constraints.video.facingMode = facingMode;
-    }
-
-    try {
-        currentStream = await navigator.mediaDevices.getUserMedia(constraints);
-    } catch {
-        // Fallback without exact deviceId
-        try {
-            currentStream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
-                audio: false,
-            });
-        } catch (err2) {
-            console.error("Camera error:", err2);
-            alert("Could not access this camera.");
-            return;
-        }
-    }
-
-    cameraFeed.srcObject = currentStream;
-
-    // Detect zoom capability
-    zoomCapability = null;
-    currentZoom = 1;
-
-    const track = currentStream.getVideoTracks()[0];
-    if (track && typeof track.getCapabilities === "function") {
-        const caps = track.getCapabilities();
-        if (caps.zoom && caps.zoom.max > 1) {
-            zoomCapability = {
-                min: caps.zoom.min,
-                max: caps.zoom.max,
-                step: caps.zoom.step || 0.1,
-            };
-            currentZoom = track.getSettings?.().zoom || 1;
-        }
-    }
-
-    buildLensPicker();
-    showScreen(cameraScreen);
-}
-
-/**
- * Apply digital zoom to the active track.
- */
-async function applyZoom(level) {
-    if (!currentStream || !zoomCapability) return;
-    const track = currentStream.getVideoTracks()[0];
-    if (!track) return;
-
-    const clamped = Math.max(zoomCapability.min, Math.min(zoomCapability.max, level));
-    try {
-        await track.applyConstraints({ advanced: [{ zoom: clamped }] });
-        currentZoom = clamped;
-    } catch (err) {
-        console.warn("Zoom not supported:", err);
-    }
-}
-
-/**
- * Build the lens picker buttons from detected cameras + zoom levels.
- */
-function buildLensPicker() {
-    lensOptionsEl.innerHTML = "";
-
-    const multiCam = rearCameras.length > 1;
-    const hasZoom = zoomCapability && zoomCapability.max > 1;
-
-    if (!multiCam && !hasZoom) {
-        lensPicker.classList.add("hidden");
-        return;
-    }
-    lensPicker.classList.remove("hidden");
-
-    // Camera buttons
-    if (multiCam) {
-        rearCameras.forEach(cam => {
-            const btn = document.createElement("button");
-            btn.className = "lens-btn" + (cam.deviceId === activeDeviceId ? " active" : "");
-            btn.textContent = cam.shortLabel;
-            btn.title = cam.label;
-            btn.addEventListener("click", () => {
-                activeDeviceId = cam.deviceId;
-                startCameraWithDevice(cam.deviceId);
-            });
-            lensOptionsEl.appendChild(btn);
-        });
-    }
-
-    // Zoom buttons
-    if (hasZoom) {
-        if (multiCam) {
-            const sep = document.createElement("div");
-            sep.style.cssText = "width:1px;height:20px;background:rgba(255,255,255,0.12);margin:0 4px;flex-shrink:0;";
-            lensOptionsEl.appendChild(sep);
-        }
-
-        const steps = [1];
-        if (zoomCapability.max >= 2) steps.push(2);
-        if (zoomCapability.max >= 4) steps.push(4);
-        if (zoomCapability.max >= 10) steps.push(10);
-
-        steps.forEach(z => {
-            const btn = document.createElement("button");
-            btn.className = "lens-btn" + (Math.abs(currentZoom - z) < 0.3 ? " active" : "");
-            btn.textContent = `${z}×`;
-            btn.title = `${z}x zoom`;
-            btn.addEventListener("click", async () => {
-                await applyZoom(z);
-                buildLensPicker();
-            });
-            lensOptionsEl.appendChild(btn);
-        });
-    }
-}
-
-/**
- * Start camera (for retake flows).
- */
-async function startCamera() {
-    if (rearCameras.length === 0) {
-        await initCameras();
-    } else {
-        await startCameraWithDevice(activeDeviceId);
-    }
-}
-
-function stopCamera() {
-    if (currentStream) {
-        currentStream.getTracks().forEach(t => t.stop());
-        currentStream = null;
-    }
-}
-
-// ============================================================
-//  Capture — crops the visible square region
-// ============================================================
-function capturePhoto() {
-    const video = cameraFeed;
+function processAndSendImage(img) {
     const canvas = captureCanvas;
+    const ctx = canvas.getContext("2d");
 
-    const vw = video.videoWidth;
-    const vh = video.videoHeight;
-    if (!vw || !vh) return;
+    // Crop to the center square of the original image
+    const side = Math.min(img.width, img.height);
+    const srcX = (img.width - side) / 2;
+    const srcY = (img.height - side) / 2;
 
-    const wrapperRect = cameraWrapper.getBoundingClientRect();
-    const ew = wrapperRect.width;
-    const eh = wrapperRect.height;
-
-    const side = Math.min(ew * 0.75, eh * 0.75, 300);
-
-    const scaleX = vw / ew;
-    const scaleY = vh / eh;
-    const coverScale = Math.min(scaleX, scaleY);
-
-    const visW = ew * coverScale;
-    const visH = eh * coverScale;
-
-    const offX = (vw - visW) / 2;
-    const offY = (vh - visH) / 2;
-
-    const fX = (ew - side) / 2;
-    const fY = (eh - side) / 2;
-
-    const srcX = offX + fX * coverScale;
-    const srcY = offY + fY * coverScale;
-    const srcSize = side * coverScale;
-
-    const outSize = Math.min(Math.round(srcSize), 640);
+    // Downscale target square to 640x640 to save bandwidth
+    const outSize = Math.min(side, 640);
     canvas.width = outSize;
     canvas.height = outSize;
 
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(video, srcX, srcY, srcSize, srcSize, 0, 0, outSize, outSize);
+    // Draw cropped region onto canvas
+    ctx.drawImage(img, srcX, srcY, side, side, 0, 0, outSize, outSize);
 
+    // Get Base64 JPEG
     const dataUrl = canvas.toDataURL("image/jpeg", 0.88);
-    capturedPreview.src = dataUrl;
 
-    stopCamera();
+    // Show preview and start server pipeline
+    capturedPreview.src = dataUrl;
     showScreen(resultScreen);
     startCapturePipeline(dataUrl);
 }
@@ -505,15 +255,3 @@ function showError(msg) {
     resultLoading.classList.add("hidden");
     resultError.classList.remove("hidden");
 }
-
-// ============================================================
-//  Event listeners
-// ============================================================
-btnGrantCamera.addEventListener("click", () => initCameras());
-btnCapture.addEventListener("click", () => capturePhoto());
-btnSwitchCamera.addEventListener("click", () => {
-    facingMode = facingMode === "environment" ? "user" : "environment";
-    rearCameras = [];  // re-enumerate for new facing mode
-    initCameras();
-});
-btnRetake.addEventListener("click", () => startCamera());

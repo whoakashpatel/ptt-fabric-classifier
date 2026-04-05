@@ -24,41 +24,19 @@
             </div>
         </header>
 
-        <!-- Permission Screen -->
-        <section id="permission-screen" class="screen active">
-            <div class="card neon-card permission-card">
-                <h2>Camera Access Required</h2>
-                <button id="btn-grant-camera" class="btn btn-outline">
-                    Enable Camera
+        <!-- Intro / Capture Screen -->
+        <section id="capture-screen" class="screen active">
+            <div class="card neon-card permission-card" style="text-align: center; padding: 3rem 1.5rem;">
+                <h2 style="margin-bottom: 1rem;">Ready to Classify</h2>
+                <p style="color: var(--text-secondary); font-size: var(--font-size-sm); margin-bottom: 2rem;">
+                    Click below to open your camera. Keep the fabric close for the best texture details.
+                </p>
+                <!-- Native Camera Input -->
+                <input type="file" id="native-camera-input" accept="image/*" capture="environment" style="display: none;" />
+                <button id="btn-open-camera" class="btn btn-outline" style="width: 100%;">
+                    Open Camera
                 </button>
-            </div>
-        </section>
-
-        <!-- Camera Screen -->
-        <section id="camera-screen" class="screen">
-            <div class="camera-wrapper">
-                <video id="camera-feed" autoplay playsinline></video>
                 <canvas id="capture-canvas" style="display: none;"></canvas>
-                <div class="camera-overlay">
-                    <div class="scan-frame"></div>
-                    <div class="dim-top"></div>
-                    <div class="dim-bottom"></div>
-                    <div class="dim-left"></div>
-                    <div class="dim-right"></div>
-                </div>
-            </div>
-            <!-- Lens picker -->
-            <div id="lens-picker" class="lens-picker hidden">
-                <div id="lens-options" class="lens-options"></div>
-            </div>
-            <div class="camera-controls">
-                <button id="btn-switch-camera" class="btn btn-icon-only" title="Switch camera">
-                    🔄
-                </button>
-                <button id="btn-capture" class="btn btn-capture" title="Capture photo">
-                    <span class="capture-ring"></span>
-                </button>
-                <div class="spacer"></div>
             </div>
         </section>
 
