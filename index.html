@@ -45,10 +45,16 @@
                 <p style="color: var(--text-secondary); font-size: var(--font-size-sm); margin-bottom: 2rem;">
                     Take a close-up photo of the fabric. Use your camera's optical zoom for best texture detail.
                 </p>
-                <input type="file" id="native-camera-input" accept="image/*" style="display: none;" />
-                <button id="btn-open-camera" class="btn btn-outline" style="width: 100%;">
-                    Take / Choose Photo
-                </button>
+                <input type="file" id="native-camera-input" accept="image/*" capture="environment" style="display: none;" />
+                <input type="file" id="gallery-input" accept="image/*" style="display: none;" />
+                <div style="display: flex; gap: 8px;">
+                    <button id="btn-open-camera" class="btn btn-outline" style="flex: 1;">
+                        📷 Take Photo
+                    </button>
+                    <button id="btn-open-gallery" class="btn btn-outline" style="flex: 1;">
+                        🖼️ From Gallery
+                    </button>
+                </div>
                 <canvas id="capture-canvas" style="display: none;"></canvas>
             </div>
         </section>
@@ -141,10 +147,16 @@
                 <p style="color: var(--text-secondary); font-size: var(--font-size-sm); margin-bottom: 2rem;">
                     Take a clear, close-up photo of the fabric. You'll label it on the next step.
                 </p>
-                <input type="file" id="train-camera-input" accept="image/*" style="display: none;" />
-                <button id="btn-train-photo" class="btn btn-outline" style="width: 100%;">
-                    Take / Choose Photo
-                </button>
+                <input type="file" id="train-camera-input" accept="image/*" capture="environment" style="display: none;" />
+                <input type="file" id="train-gallery-input" accept="image/*" style="display: none;" />
+                <div style="display: flex; gap: 8px;">
+                    <button id="btn-train-photo" class="btn btn-outline" style="flex: 1;">
+                        📷 Take Photo
+                    </button>
+                    <button id="btn-train-gallery" class="btn btn-outline" style="flex: 1;">
+                        🖼️ From Gallery
+                    </button>
+                </div>
                 <canvas id="train-canvas" style="display: none;"></canvas>
             </div>
         </section>

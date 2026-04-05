@@ -32,11 +32,13 @@ const trainLabelScreen = document.getElementById("train-label-screen");
 const allScreens = [captureScreen, resultScreen, trainCaptureScreen, trainLabelScreen];
 
 // Classify mode
-const nativeInput = document.getElementById("native-camera-input");
-const btnOpenCamera = document.getElementById("btn-open-camera");
-const captureCanvas = document.getElementById("capture-canvas");
-const capturedPreview = document.getElementById("captured-preview");
-const btnRetake = document.getElementById("btn-retake");
+const nativeInput        = document.getElementById("native-camera-input");
+const galleryInput       = document.getElementById("gallery-input");
+const btnOpenCamera      = document.getElementById("btn-open-camera");
+const btnOpenGallery     = document.getElementById("btn-open-gallery");
+const captureCanvas      = document.getElementById("capture-canvas");
+const capturedPreview    = document.getElementById("captured-preview");
+const btnRetake          = document.getElementById("btn-retake");
 
 // Result UI
 const resultLoading = document.getElementById("result-loading");
@@ -56,15 +58,17 @@ const sensorHumidity = document.getElementById("sensor-humidity");
 const deviceOfflineNote = document.getElementById("device-offline-note");
 
 // Training mode
-const trainCameraInput = document.getElementById("train-camera-input");
-const btnTrainPhoto = document.getElementById("btn-train-photo");
-const trainCanvas = document.getElementById("train-canvas");
-const trainPreview = document.getElementById("train-preview");
-const classGrid = document.getElementById("class-grid");
-const btnUploadDrive = document.getElementById("btn-upload-drive");
-const uploadStatus = document.getElementById("upload-status");
-const driveAuthRow = document.getElementById("drive-auth-row");
-const btnTrainRetake = document.getElementById("btn-train-retake");
+const trainCameraInput   = document.getElementById("train-camera-input");
+const trainGalleryInput  = document.getElementById("train-gallery-input");
+const btnTrainPhoto      = document.getElementById("btn-train-photo");
+const btnTrainGallery    = document.getElementById("btn-train-gallery");
+const trainCanvas        = document.getElementById("train-canvas");
+const trainPreview       = document.getElementById("train-preview");
+const classGrid          = document.getElementById("class-grid");
+const btnUploadDrive     = document.getElementById("btn-upload-drive");
+const uploadStatus       = document.getElementById("upload-status");
+const driveAuthRow       = document.getElementById("drive-auth-row");
+const btnTrainRetake     = document.getElementById("btn-train-retake");
 
 // Mode toggle
 const modeBanner = document.querySelector(".mode-banner");
@@ -131,16 +135,24 @@ btnModeToggle.addEventListener("click", () => {
 //  CLASSIFY MODE — Image capture + inference pipeline
 // ============================================================
 btnOpenCamera.addEventListener("click", () => nativeInput.click());
+btnOpenGallery.addEventListener("click", () => galleryInput.click());
 
-nativeInput.addEventListener("change", (e) => {
+function handleClassifyChange(e) {
     const file = e.target.files[0];
     if (!file) return;
+    
+    // Clear both inputs so same file can trigger change again
     nativeInput.value = "";
+    galleryInput.value = "";
+    
     readAndProcess(file, captureCanvas, capturedPreview, (dataUrl) => {
         showScreen(resultScreen);
         startCapturePipeline(dataUrl);
     });
-});
+}
+
+nativeInput.addEventListener("change", handleClassifyChange);
+galleryInput.addEventListener("change", handleClassifyChange);
 
 btnRetake.addEventListener("click", () => showScreen(captureScreen));
 
@@ -271,18 +283,26 @@ async function init() {
 init();
 
 btnTrainPhoto.addEventListener("click", () => trainCameraInput.click());
+btnTrainGallery.addEventListener("click", () => trainGalleryInput.click());
 
-trainCameraInput.addEventListener("change", (e) => {
+function handleTrainingChange(e) {
     const file = e.target.files[0];
     if (!file) return;
+    
+    // Clear inputs
     trainCameraInput.value = "";
+    trainGalleryInput.value = "";
+    
     readAndProcess(file, trainCanvas, trainPreview, (_dataUrl, canvas) => {
         // Store blob for Drive upload
         canvas.toBlob((blob) => { trainImageBlob = blob; }, "image/jpeg", 0.88);
         resetTrainUploadUI();
         showScreen(trainLabelScreen);
     });
-});
+}
+
+trainCameraInput.addEventListener("change", handleTrainingChange);
+trainGalleryInput.addEventListener("change", handleTrainingChange);
 
 btnTrainRetake.addEventListener("click", () => {
     trainImageBlob = null;
