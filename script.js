@@ -6,22 +6,6 @@
 // ─── CONFIG ────────────────────────────────────────────────
 const API_URL = "https://hsakaletap-ptt-fabric-classifier.hf.space";
 
-// Credentials — loaded at runtime from Netlify /config edge function
-// so they never appear in source code.
-let GOOGLE_CLIENT_ID = "";
-let DRIVE_FOLDER_IDS = {};
-
-async function fetchConfig() {
-    try {
-        const res = await fetch("/config", { cache: "no-store" });
-        if (!res.ok) throw new Error(`/config ${res.status}`);
-        const cfg = await res.json();
-        GOOGLE_CLIENT_ID = cfg.googleClientId ?? "";
-        DRIVE_FOLDER_IDS = cfg.driveFolderIds ?? {};
-    } catch (err) {
-        console.warn("Could not load /config (local dev?):", err);
-    }
-}
 // ───────────────────────────────────────────────────────────
 
 // ─── DOM REFS ───────────────────────────────────────────────
@@ -83,10 +67,10 @@ const deviceStatusDot = document.querySelector(".status-dot");
 let isTrainingMode = false;
 let selectedClass = null;
 let driveAccessToken = null;  // set after OAuth
-let trainImageBlob = null;  // the raw JPEG blob for Drive upload
+let trainImageBlob = null;  // the raw JPEG blob for backend upload
 
 // ─── FABRIC CLASSES ─────────────────────────────────────────
-let FABRIC_CLASSES = [];
+const FABRIC_CLASSES = ["Cotton", "Polyester", "Denim", "Wool", "Silk", "Nylon", "Acrylic", "Mixed (Cotton+)", "Mixed (Polyester+)"];
 
 // ============================================================
 //  Device status polling
@@ -277,16 +261,8 @@ function showClassifyError(msg) {
 //  TRAINING MODE — Photo → label → upload to Drive
 // ============================================================
 
-// Startup: fetch credentials first, then build the class grid
-async function init() {
-    await fetchConfig();
-    
-    FABRIC_CLASSES = Object.keys(DRIVE_FOLDER_IDS);
-    // Local dev fallback if Netlify /config edge function is unavailable
-    if (FABRIC_CLASSES.length === 0) {
-        FABRIC_CLASSES = ["Cotton", "Polyester", "Denim", "Wool", "Silk", "Nylon", "Acrylic", "Mixed (Cotton+)", "Mixed (Polyester+)"];
-    }
-    
+// Startup: build the class grid
+function init() {
     buildClassGrid();
 }
 init();
@@ -346,93 +322,50 @@ function resetTrainUploadUI() {
     btnUploadDrive.disabled = true;
     uploadStatus.className = "upload-status hidden";
     uploadStatus.textContent = "";
-    driveAuthRow.classList.add("hidden");
 }
 
-// ─── Google Drive Upload ─────────────────────────────────────
+// ─── HF Space Backend Upload ─────────────────────────────────────
 btnUploadDrive.addEventListener("click", async () => {
     if (!selectedClass) return;
     if (!trainImageBlob) { setUploadStatus("No image captured.", "error"); return; }
-
-    if (!driveAccessToken) {
-        // Trigger Google OAuth
-        initGoogleAuth();
-        return;
-    }
     await doUpload();
 });
 
-function initGoogleAuth() {
-    if (typeof google === "undefined") {
-        setUploadStatus("Google SDK not loaded yet — try again.", "error");
-        return;
-    }
-    const client = google.accounts.oauth2.initTokenClient({
-        client_id: GOOGLE_CLIENT_ID,
-        scope: "https://www.googleapis.com/auth/drive.file",
-        callback: async (response) => {
-            if (response.error) {
-                setUploadStatus("Sign-in cancelled or failed.", "error");
-                return;
-            }
-            driveAccessToken = response.access_token;
-            driveAuthRow.classList.add("hidden");
-            await doUpload();
-        },
-    });
-    client.requestAccessToken();
-}
-
 async function doUpload() {
-    if (!selectedClass || !trainImageBlob || !driveAccessToken) return;
+    if (!selectedClass || !trainImageBlob) return;
 
-    const folderId = DRIVE_FOLDER_IDS[selectedClass];
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const filename = `${timestamp}_${selectedClass.replace(/[^a-zA-Z0-9]/g, "_")}.jpg`;
-
-    setUploadStatus("Uploading…", "uploading");
+    setUploadStatus("Uploading to server…", "uploading");
     btnUploadDrive.disabled = true;
 
-    // Drive API multipart upload
-    const meta = JSON.stringify({ name: filename, parents: [folderId] });
-    const boundary = "ptt_boundary_xyz";
-
-    const body = [
-        `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n`,
-        `--${boundary}\r\nContent-Type: image/jpeg\r\n\r\n`,
-    ];
-    const bodyBlob = new Blob([
-        body[0], body[1], trainImageBlob, `\r\n--${boundary}--`
-    ], { type: `multipart/related; boundary=${boundary}` });
-
     try {
-        const res = await fetch(
-            "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
-            {
+        // Convert Blob to Base64 to send via JSON
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+            const base64data = reader.result;
+            
+            const payload = {
+                image: base64data,
+                class_name: selectedClass
+            };
+
+            const res = await fetch(`${API_URL}/train/upload`, {
                 method: "POST",
-                headers: {
-                    Authorization: `Bearer ${driveAccessToken}`,
-                    "Content-Type": `multipart/related; boundary=${boundary}`,
-                },
-                body: bodyBlob,
-            }
-        );
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            });
 
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            // Token may have expired — clear it
-            if (res.status === 401) {
-                driveAccessToken = null;
-                setUploadStatus("Session expired — click Upload to sign in again.", "error");
-            } else {
-                setUploadStatus(`Upload failed: ${err.error?.message || res.status}`, "error");
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                setUploadStatus(`Upload failed: ${err.detail || res.statusText}`, "error");
+                btnUploadDrive.disabled = false;
+                return;
             }
+
+            setUploadStatus(`✓ Uploaded to Drive → ${selectedClass}`, "success");
             btnUploadDrive.disabled = false;
-            return;
-        }
+        };
+        reader.readAsDataURL(trainImageBlob);
 
-        setUploadStatus(`✓ Saved to Drive → ${selectedClass}`, "success");
-        btnUploadDrive.disabled = false;
     } catch (err) {
         setUploadStatus("Network error during upload.", "error");
         btnUploadDrive.disabled = false;

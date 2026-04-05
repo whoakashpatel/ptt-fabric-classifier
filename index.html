@@ -11,10 +11,6 @@
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap"
         rel="stylesheet" />
     <link rel="stylesheet" href="style.css" />
-    <!-- Google Identity Services (for OAuth) -->
-    <script src="https://accounts.google.com/gsi/client" async></script>
-    <!-- Google API client -->
-    <script src="https://apis.google.com/js/api.js" async></script>
 </head>
 
 <body>
@@ -173,10 +169,6 @@
                 </div>
                 <!-- Drive upload -->
                 <div id="train-drive-section" style="margin-top: 1.5rem;">
-                    <div id="drive-auth-row" class="drive-auth-row hidden">
-                        <span class="drive-auth-hint">Sign in with Google to upload</span>
-                        <div id="google-signin-btn"></div>
-                    </div>
                     <button id="btn-upload-drive" class="btn btn-outline" style="width: 100%;" disabled>
                         Upload to Google Drive
                     </button>
