@@ -632,3 +632,147 @@ body {
         margin-top: var(--space-xl);
     }
 }
+
+/* ========================================
+   Mode Toggle Banner
+   ======================================== */
+.mode-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px var(--space-md);
+    border-bottom: 1px solid var(--border-subtle);
+    background: rgba(255,255,255,0.02);
+}
+
+.mode-label {
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.btn-mode-toggle {
+    font-family: var(--font-family);
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    color: var(--neon-blue);
+    background: transparent;
+    border: 1px solid rgba(77, 201, 246, 0.3);
+    border-radius: var(--radius-full);
+    padding: 4px 12px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    -webkit-tap-highlight-color: transparent;
+}
+
+.btn-mode-toggle:active {
+    background: rgba(77, 201, 246, 0.08);
+}
+
+/* Training mode — tint the banner */
+.mode-banner.training .mode-label {
+    color: var(--neon-purple);
+}
+
+.mode-banner.training .btn-mode-toggle {
+    color: var(--neon-purple);
+    border-color: rgba(168, 85, 247, 0.3);
+}
+
+/* ========================================
+   Class Selector Grid
+   ======================================== */
+.class-picker-title {
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: var(--space-md);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.class-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+
+.class-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 10px 6px;
+    border-radius: var(--radius-sm);
+    border: 1.5px solid var(--border-subtle);
+    background: rgba(255,255,255,0.03);
+    color: var(--text-secondary);
+    font-family: var(--font-family);
+    font-size: 0.72rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    line-height: 1.2;
+    min-height: 52px;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.class-btn:active {
+    transform: scale(0.96);
+}
+
+.class-btn.selected {
+    border-color: var(--neon-purple);
+    color: var(--text-primary);
+    background: rgba(168, 85, 247, 0.1);
+    box-shadow: 0 0 10px rgba(168, 85, 247, 0.2);
+}
+
+/* ========================================
+   Drive Upload UI
+   ======================================== */
+.drive-auth-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-sm);
+    padding: var(--space-sm);
+    border-radius: var(--radius-sm);
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border-subtle);
+}
+
+.drive-auth-hint {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    flex: 1;
+}
+
+.upload-status {
+    margin-top: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    text-align: center;
+}
+
+.upload-status.success {
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    color: #4ade80;
+}
+
+.upload-status.error {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #f87171;
+}
+
+.upload-status.uploading {
+    background: rgba(77, 201, 246, 0.06);
+    border: 1px solid rgba(77, 201, 246, 0.2);
+    color: var(--neon-blue);
+}

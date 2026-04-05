@@ -11,6 +11,10 @@
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap"
         rel="stylesheet" />
     <link rel="stylesheet" href="style.css" />
+    <!-- Google Identity Services (for OAuth) -->
+    <script src="https://accounts.google.com/gsi/client" async></script>
+    <!-- Google API client -->
+    <script src="https://apis.google.com/js/api.js" async></script>
 </head>
 
 <body>
@@ -24,14 +28,23 @@
             </div>
         </header>
 
-        <!-- Intro / Capture Screen -->
+        <!-- Mode toggle banner -->
+        <div class="mode-banner">
+            <span class="mode-label" id="mode-label">Classify Mode</span>
+            <button id="btn-mode-toggle" class="btn-mode-toggle" title="Switch mode">
+                <span id="mode-toggle-text">Switch to Training</span>
+            </button>
+        </div>
+
+        <!-- ==================== CLASSIFY SCREENS ==================== -->
+
+        <!-- Capture Screen -->
         <section id="capture-screen" class="screen active">
             <div class="card neon-card permission-card" style="text-align: center; padding: 3rem 1.5rem;">
                 <h2 style="margin-bottom: 1rem;">Ready to Classify</h2>
                 <p style="color: var(--text-secondary); font-size: var(--font-size-sm); margin-bottom: 2rem;">
-                    Click below to open your camera. Keep the fabric close for the best texture details.
+                    Take a close-up photo of the fabric. Use your camera's optical zoom for best texture detail.
                 </p>
-                <!-- Native Camera Input -->
                 <input type="file" id="native-camera-input" accept="image/*" style="display: none;" />
                 <button id="btn-open-camera" class="btn btn-outline" style="width: 100%;">
                     Take / Choose Photo
@@ -62,7 +75,6 @@
                 </div>
                 <!-- Success state -->
                 <div id="result-success" class="result-content hidden">
-                    <!-- Classification -->
                     <div class="result-badge">
                         <span class="badge-label">Predicted Class</span>
                         <span id="result-class" class="badge-value"></span>
@@ -116,6 +128,52 @@
             <div class="result-actions">
                 <button id="btn-retake" class="btn btn-outline">
                     Classify Another
+                </button>
+            </div>
+        </section>
+
+        <!-- ==================== TRAINING SCREENS ==================== -->
+
+        <!-- Training: Capture Screen -->
+        <section id="train-capture-screen" class="screen">
+            <div class="card neon-card permission-card" style="text-align: center; padding: 3rem 1.5rem;">
+                <h2 style="margin-bottom: 1rem;">Collect Training Image</h2>
+                <p style="color: var(--text-secondary); font-size: var(--font-size-sm); margin-bottom: 2rem;">
+                    Take a clear, close-up photo of the fabric. You'll label it on the next step.
+                </p>
+                <input type="file" id="train-camera-input" accept="image/*" style="display: none;" />
+                <button id="btn-train-photo" class="btn btn-outline" style="width: 100%;">
+                    Take / Choose Photo
+                </button>
+                <canvas id="train-canvas" style="display: none;"></canvas>
+            </div>
+        </section>
+
+        <!-- Training: Label & Upload Screen -->
+        <section id="train-label-screen" class="screen">
+            <div class="captured-preview-wrapper">
+                <img id="train-preview" alt="Training sample" />
+            </div>
+            <div class="card neon-card" style="padding: 1.5rem;">
+                <p class="class-picker-title">Select fabric class</p>
+                <div class="class-grid" id="class-grid">
+                    <!-- Populated by JS -->
+                </div>
+                <!-- Drive upload -->
+                <div id="train-drive-section" style="margin-top: 1.5rem;">
+                    <div id="drive-auth-row" class="drive-auth-row hidden">
+                        <span class="drive-auth-hint">Sign in with Google to upload</span>
+                        <div id="google-signin-btn"></div>
+                    </div>
+                    <button id="btn-upload-drive" class="btn btn-outline" style="width: 100%;" disabled>
+                        Upload to Google Drive
+                    </button>
+                    <div id="upload-status" class="upload-status hidden"></div>
+                </div>
+            </div>
+            <div class="result-actions">
+                <button id="btn-train-retake" class="btn btn-outline">
+                    Retake
                 </button>
             </div>
         </section>
