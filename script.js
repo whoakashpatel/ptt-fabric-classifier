@@ -86,7 +86,7 @@ let driveAccessToken = null;  // set after OAuth
 let trainImageBlob = null;  // the raw JPEG blob for Drive upload
 
 // ─── FABRIC CLASSES ─────────────────────────────────────────
-const FABRIC_CLASSES = Object.keys(DRIVE_FOLDER_IDS);
+let FABRIC_CLASSES = [];
 
 // ============================================================
 //  Device status polling
@@ -161,7 +161,7 @@ function readAndProcess(file, canvas, previewEl, onReady) {
     reader.onload = (e) => {
         const img = new Image();
         img.onload = () => {
-            const blob = cropToSquare(img, canvas, 640);
+            const blob = scaleDown(img, canvas, 640);
             const dataUrl = canvas.toDataURL("image/jpeg", 0.88);
             if (previewEl) previewEl.src = dataUrl;
             onReady(dataUrl, blob);
@@ -171,16 +171,22 @@ function readAndProcess(file, canvas, previewEl, onReady) {
     reader.readAsDataURL(file);
 }
 
-/** Crops an <img> to center square, draws onto canvas, returns Blob */
-function cropToSquare(img, canvas, maxSize) {
-    const side = Math.min(img.width, img.height);
-    const sx = (img.width - side) / 2;
-    const sy = (img.height - side) / 2;
-    const out = Math.min(side, maxSize);
-    canvas.width = out;
-    canvas.height = out;
-    canvas.getContext("2d").drawImage(img, sx, sy, side, side, 0, 0, out, out);
-    // Return a blob (used by training upload)
+/** Scales an <img> down to maxSize proportionally, draws onto canvas, returns Blob */
+function scaleDown(img, canvas, maxSize) {
+    let w = img.width;
+    let h = img.height;
+    if (w > maxSize || h > maxSize) {
+        if (w > h) {
+            h = Math.round((h * maxSize) / w);
+            w = maxSize;
+        } else {
+            w = Math.round((w * maxSize) / h);
+            h = maxSize;
+        }
+    }
+    canvas.width = w;
+    canvas.height = h;
+    canvas.getContext("2d").drawImage(img, 0, 0, w, h);
     return canvas;
 }
 
@@ -278,6 +284,13 @@ function showClassifyError(msg) {
 // Startup: fetch credentials first, then build the class grid
 async function init() {
     await fetchConfig();
+    
+    FABRIC_CLASSES = Object.keys(DRIVE_FOLDER_IDS);
+    // Local dev fallback if Netlify /config edge function is unavailable
+    if (FABRIC_CLASSES.length === 0) {
+        FABRIC_CLASSES = ["Cotton", "Polyester", "Denim", "Wool", "Silk", "Nylon", "Acrylic", "Mixed (Cotton+)", "Mixed (Polyester+)"];
+    }
+    
     buildClassGrid();
 }
 init();
