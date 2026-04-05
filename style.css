@@ -319,6 +319,7 @@ body {
     margin: 0 auto;
     border-radius: var(--radius-md);
     overflow: hidden;
+    aspect-ratio: 1 / 1;
     width: 280px;
     max-width: calc(100% - 2rem);
     box-shadow: var(--neon-shadow);

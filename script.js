@@ -161,7 +161,7 @@ function readAndProcess(file, canvas, previewEl, onReady) {
     reader.onload = (e) => {
         const img = new Image();
         img.onload = () => {
-            const blob = scaleDown(img, canvas, 640);
+            const blob = cropToSquare(img, canvas, 640);
             const dataUrl = canvas.toDataURL("image/jpeg", 0.88);
             if (previewEl) previewEl.src = dataUrl;
             onReady(dataUrl, blob);
@@ -171,22 +171,18 @@ function readAndProcess(file, canvas, previewEl, onReady) {
     reader.readAsDataURL(file);
 }
 
-/** Scales an <img> down to maxSize proportionally, draws onto canvas, returns Blob */
-function scaleDown(img, canvas, maxSize) {
-    let w = img.width;
-    let h = img.height;
-    if (w > maxSize || h > maxSize) {
-        if (w > h) {
-            h = Math.round((h * maxSize) / w);
-            w = maxSize;
-        } else {
-            w = Math.round((w * maxSize) / h);
-            h = maxSize;
-        }
-    }
-    canvas.width = w;
-    canvas.height = h;
-    canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+/** Center-crops <img> to a square and scales to exactly targetSize x targetSize for YOLO */
+function cropToSquare(img, canvas, targetSize) {
+    const side = Math.min(img.width, img.height);
+    const sx = (img.width - side) / 2;
+    const sy = (img.height - side) / 2;
+    
+    // YOLO models typically expect 640x640
+    canvas.width = targetSize;
+    canvas.height = targetSize;
+    
+    // Draw the cropped center portion directly into the 640x640 canvas
+    canvas.getContext("2d").drawImage(img, sx, sy, side, side, 0, 0, targetSize, targetSize);
     return canvas;
 }
 
