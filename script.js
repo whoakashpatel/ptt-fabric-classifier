@@ -5,6 +5,18 @@
 
 // ─── CONFIG ────────────────────────────────────────────────
 const API_URL = "https://hsakaletap-ptt-fabric-classifier.hf.space";
+let GOOGLE_CLIENT_ID = "";
+
+async function fetchConfig() {
+    try {
+        const res = await fetch(`${API_URL}/config`);
+        const data = await res.json();
+        GOOGLE_CLIENT_ID = data.google_client_id;
+    } catch (e) {
+        console.error("Failed to fetch config.");
+    }
+}
+
 
 // ───────────────────────────────────────────────────────────
 
@@ -66,7 +78,7 @@ const deviceStatusDot = document.querySelector(".status-dot");
 // ─── MODE STATE ─────────────────────────────────────────────
 let isTrainingMode = false;
 let selectedClass = null;
-let driveAccessToken = null;  // set after OAuth
+let googleToken = null;  // JWT from Google Identity
 let trainImageBlob = null;  // the raw JPEG blob for backend upload
 
 // ─── FABRIC CLASSES ─────────────────────────────────────────
@@ -262,10 +274,28 @@ function showClassifyError(msg) {
 // ============================================================
 
 // Startup: build the class grid
-function init() {
+async function init() {
+    await fetchConfig();
     buildClassGrid();
+    initGoogleIdentity();
 }
 init();
+
+function initGoogleIdentity() {
+    if (typeof google === "undefined" || !GOOGLE_CLIENT_ID) return;
+    google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: (res) => {
+            googleToken = res.credential;
+            document.getElementById("google-signin-btn").style.display = "none";
+            setUploadStatus("Signed in correctly.", "success");
+        }
+    });
+    google.accounts.id.renderButton(
+        document.getElementById("google-signin-btn"),
+        { theme: "outline", size: "large", width: "100%" }
+    );
+}
 
 btnTrainPhoto.addEventListener("click", () => trainCameraInput.click());
 btnTrainGallery.addEventListener("click", () => trainGalleryInput.click());
@@ -328,11 +358,12 @@ function resetTrainUploadUI() {
 btnUploadDrive.addEventListener("click", async () => {
     if (!selectedClass) return;
     if (!trainImageBlob) { setUploadStatus("No image captured.", "error"); return; }
+    if (!googleToken) { setUploadStatus("Please sign in with Google first.", "error"); return; }
     await doUpload();
 });
 
 async function doUpload() {
-    if (!selectedClass || !trainImageBlob) return;
+    if (!selectedClass || !trainImageBlob || !googleToken) return;
 
     setUploadStatus("Uploading to server…", "uploading");
     btnUploadDrive.disabled = true;
@@ -345,7 +376,8 @@ async function doUpload() {
             
             const payload = {
                 image: base64data,
-                class_name: selectedClass
+                class_name: selectedClass,
+                google_token: googleToken
             };
 
             const res = await fetch(`${API_URL}/train/upload`, {
