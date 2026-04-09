@@ -28,13 +28,13 @@ const trainLabelScreen = document.getElementById("train-label-screen");
 const allScreens = [captureScreen, resultScreen, trainCaptureScreen, trainLabelScreen];
 
 // Classify mode
-const nativeInput        = document.getElementById("native-camera-input");
-const galleryInput       = document.getElementById("gallery-input");
-const btnOpenCamera      = document.getElementById("btn-open-camera");
-const btnOpenGallery     = document.getElementById("btn-open-gallery");
-const captureCanvas      = document.getElementById("capture-canvas");
-const capturedPreview    = document.getElementById("captured-preview");
-const btnRetake          = document.getElementById("btn-retake");
+const nativeInput = document.getElementById("native-camera-input");
+const galleryInput = document.getElementById("gallery-input");
+const btnOpenCamera = document.getElementById("btn-open-camera");
+const btnOpenGallery = document.getElementById("btn-open-gallery");
+const captureCanvas = document.getElementById("capture-canvas");
+const capturedPreview = document.getElementById("captured-preview");
+const btnRetake = document.getElementById("btn-retake");
 
 // Result UI
 const resultLoading = document.getElementById("result-loading");
@@ -54,17 +54,17 @@ const sensorHumidity = document.getElementById("sensor-humidity");
 const deviceOfflineNote = document.getElementById("device-offline-note");
 
 // Training mode
-const trainCameraInput   = document.getElementById("train-camera-input");
-const trainGalleryInput  = document.getElementById("train-gallery-input");
-const btnTrainPhoto      = document.getElementById("btn-train-photo");
-const btnTrainGallery    = document.getElementById("btn-train-gallery");
-const trainCanvas        = document.getElementById("train-canvas");
-const trainPreview       = document.getElementById("train-preview");
-const classGrid          = document.getElementById("class-grid");
-const btnUploadDrive     = document.getElementById("btn-upload-drive");
-const uploadStatus       = document.getElementById("upload-status");
-const driveAuthRow       = document.getElementById("drive-auth-row");
-const btnTrainRetake     = document.getElementById("btn-train-retake");
+const trainCameraInput = document.getElementById("train-camera-input");
+const trainGalleryInput = document.getElementById("train-gallery-input");
+const btnTrainPhoto = document.getElementById("btn-train-photo");
+const btnTrainGallery = document.getElementById("btn-train-gallery");
+const trainCanvas = document.getElementById("train-canvas");
+const trainPreview = document.getElementById("train-preview");
+const classGrid = document.getElementById("class-grid");
+const btnUploadDrive = document.getElementById("btn-upload-drive");
+const uploadStatus = document.getElementById("upload-status");
+const driveAuthRow = document.getElementById("drive-auth-row");
+const btnTrainRetake = document.getElementById("btn-train-retake");
 
 // Mode toggle
 const modeBanner = document.querySelector(".mode-banner");
@@ -136,11 +136,11 @@ btnOpenGallery.addEventListener("click", () => galleryInput.click());
 function handleClassifyChange(e) {
     const file = e.target.files[0];
     if (!file) return;
-    
+
     // Clear both inputs so same file can trigger change again
     nativeInput.value = "";
     galleryInput.value = "";
-    
+
     readAndProcess(file, captureCanvas, capturedPreview, (dataUrl) => {
         showScreen(resultScreen);
         startCapturePipeline(dataUrl);
@@ -172,11 +172,11 @@ function cropToSquare(img, canvas, targetSize) {
     const side = Math.min(img.width, img.height);
     const sx = (img.width - side) / 2;
     const sy = (img.height - side) / 2;
-    
+
     // YOLO models typically expect 640x640
     canvas.width = targetSize;
     canvas.height = targetSize;
-    
+
     // Draw the cropped center portion directly into the 640x640 canvas
     canvas.getContext("2d").drawImage(img, sx, sy, side, side, 0, 0, targetSize, targetSize);
     return canvas;
@@ -303,23 +303,23 @@ btnTrainGallery.addEventListener("click", () => trainGalleryInput.click());
 function handleTrainingChange(e) {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
-    
+
     trainImageBlobs = [];
     let processedCount = 0;
-    document.getElementById("train-preview").src = ""; 
+    document.getElementById("train-preview").src = "";
     const countEl = document.getElementById("train-multi-count");
     countEl.classList.add("hidden");
-    
+
     files.forEach((file) => {
         readAndProcess(file, trainCanvas, trainPreview, (_dataUrl, canvas) => {
             canvas.toBlob((blob) => {
                 trainImageBlobs.push(blob);
                 processedCount++;
-                
+
                 if (processedCount === files.length) {
                     resetTrainUploadUI();
                     showScreen(trainLabelScreen);
-                    
+
                     if (files.length > 1) {
                         countEl.textContent = `${files.length} images selected (uploading together)`;
                         countEl.classList.remove("hidden");
@@ -328,7 +328,7 @@ function handleTrainingChange(e) {
             }, "image/jpeg", 0.88);
         });
     });
-    
+
     // Clear inputs
     trainCameraInput.value = "";
     trainGalleryInput.value = "";
@@ -395,7 +395,7 @@ async function doUpload() {
                 const reader = new FileReader();
                 reader.onloadend = async () => {
                     const base64data = reader.result;
-                    
+
                     const payload = {
                         image: base64data,
                         class_name: selectedClass,
