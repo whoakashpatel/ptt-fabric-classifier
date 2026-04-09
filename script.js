@@ -79,7 +79,7 @@ const deviceStatusDot = document.querySelector(".status-dot");
 let isTrainingMode = false;
 let selectedClass = null;
 let googleToken = null;  // JWT from Google Identity
-let trainImageBlob = null;  // the raw JPEG blob for backend upload
+let trainImageBlobs = []; // array of raw JPEG blobs for backend batch uploads
 
 // ─── FABRIC CLASSES ─────────────────────────────────────────
 const FABRIC_CLASSES = ["Cotton", "Polyester", "Denim", "Wool", "Silk", "Nylon", "Acrylic", "Mixed (Cotton+)", "Mixed (Polyester+)"];
@@ -301,26 +301,44 @@ btnTrainPhoto.addEventListener("click", () => trainCameraInput.click());
 btnTrainGallery.addEventListener("click", () => trainGalleryInput.click());
 
 function handleTrainingChange(e) {
-    const file = e.target.files[0];
-    if (!file) return;
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+    
+    trainImageBlobs = [];
+    let processedCount = 0;
+    document.getElementById("train-preview").src = ""; 
+    const countEl = document.getElementById("train-multi-count");
+    countEl.classList.add("hidden");
+    
+    files.forEach((file) => {
+        readAndProcess(file, trainCanvas, trainPreview, (_dataUrl, canvas) => {
+            canvas.toBlob((blob) => {
+                trainImageBlobs.push(blob);
+                processedCount++;
+                
+                if (processedCount === files.length) {
+                    resetTrainUploadUI();
+                    showScreen(trainLabelScreen);
+                    
+                    if (files.length > 1) {
+                        countEl.textContent = `${files.length} images selected (uploading together)`;
+                        countEl.classList.remove("hidden");
+                    }
+                }
+            }, "image/jpeg", 0.88);
+        });
+    });
     
     // Clear inputs
     trainCameraInput.value = "";
     trainGalleryInput.value = "";
-    
-    readAndProcess(file, trainCanvas, trainPreview, (_dataUrl, canvas) => {
-        // Store blob for Drive upload
-        canvas.toBlob((blob) => { trainImageBlob = blob; }, "image/jpeg", 0.88);
-        resetTrainUploadUI();
-        showScreen(trainLabelScreen);
-    });
 }
 
 trainCameraInput.addEventListener("change", handleTrainingChange);
 trainGalleryInput.addEventListener("change", handleTrainingChange);
 
 btnTrainRetake.addEventListener("click", () => {
-    trainImageBlob = null;
+    trainImageBlobs = [];
     showScreen(trainCaptureScreen);
 });
 
@@ -357,51 +375,59 @@ function resetTrainUploadUI() {
 // ─── HF Space Backend Upload ─────────────────────────────────────
 btnUploadDrive.addEventListener("click", async () => {
     if (!selectedClass) return;
-    if (!trainImageBlob) { setUploadStatus("No image captured.", "error"); return; }
+    if (trainImageBlobs.length === 0) { setUploadStatus("No image captured.", "error"); return; }
     if (!googleToken) { setUploadStatus("Please sign in with Google first.", "error"); return; }
     await doUpload();
 });
 
 async function doUpload() {
-    if (!selectedClass || !trainImageBlob || !googleToken) return;
+    if (!selectedClass || trainImageBlobs.length === 0 || !googleToken) return;
 
-    setUploadStatus("Uploading to server…", "uploading");
     btnUploadDrive.disabled = true;
+    let successCount = 0;
 
-    try {
-        // Convert Blob to Base64 to send via JSON
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-            const base64data = reader.result;
-            
-            const payload = {
-                image: base64data,
-                class_name: selectedClass,
-                google_token: googleToken
-            };
+    for (let i = 0; i < trainImageBlobs.length; i++) {
+        setUploadStatus(`Uploading image ${i + 1} of ${trainImageBlobs.length} to server…`, "uploading");
+        const blob = trainImageBlobs[i];
 
-            const res = await fetch(`${API_URL}/train/upload`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
+        try {
+            await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = async () => {
+                    const base64data = reader.result;
+                    
+                    const payload = {
+                        image: base64data,
+                        class_name: selectedClass,
+                        google_token: googleToken
+                    };
+
+                    const res = await fetch(`${API_URL}/train/upload`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload),
+                    });
+
+                    if (!res.ok) {
+                        const err = await res.json().catch(() => ({}));
+                        reject(`Upload failed: ${err.detail || res.statusText}`);
+                        return;
+                    }
+                    resolve();
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
             });
-
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                setUploadStatus(`Upload failed: ${err.detail || res.statusText}`, "error");
-                btnUploadDrive.disabled = false;
-                return;
-            }
-
-            setUploadStatus(`✓ Uploaded to Drive → ${selectedClass}`, "success");
+            successCount++;
+        } catch (err) {
+            setUploadStatus(typeof err === "string" ? err : "Network error during upload.", "error");
             btnUploadDrive.disabled = false;
-        };
-        reader.readAsDataURL(trainImageBlob);
-
-    } catch (err) {
-        setUploadStatus("Network error during upload.", "error");
-        btnUploadDrive.disabled = false;
+            return;
+        }
     }
+
+    setUploadStatus(`✓ Uploaded ${successCount} image(s) to Drive → ${selectedClass}`, "success");
+    btnUploadDrive.disabled = false;
 }
 
 function setUploadStatus(msg, type) {
