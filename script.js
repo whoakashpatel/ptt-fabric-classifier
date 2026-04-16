@@ -82,7 +82,7 @@ let googleToken = null;  // JWT from Google Identity
 let trainImageBlobs = []; // array of raw JPEG blobs for backend batch uploads
 
 // ─── FABRIC CLASSES ─────────────────────────────────────────
-const FABRIC_CLASSES = ["Cotton", "Polyester", "Denim", "Wool", "Microfiber", "Nylon", "Mixed (Cotton+)", "Mixed (Polyester+)"];
+const FABRIC_CLASSES = ["Cotton", "Polyester", "Denim", "Wool", "Microfiber", "Nylon", "Mixed (Cotton+)"];
 
 // ============================================================
 //  Device status polling
